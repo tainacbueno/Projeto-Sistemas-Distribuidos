@@ -1,0 +1,39 @@
+services:
+  broker:
+    build: ./broker
+    container_name: broker
+    ports:
+      - "5555:5555"
+      - "5556:5556"
+
+  server1:
+    build: ./server
+    container_name: server1
+    environment:
+      - SERVER_ID=server1
+    depends_on:
+      - broker
+
+  server2:
+    build: ./server
+    container_name: server2
+    environment:
+      - SERVER_ID=server2
+    depends_on:
+      - broker
+
+  client1:
+    build: ./client
+    container_name: client1
+    environment:
+      - CLIENT_ID=client1
+    depends_on:
+      - broker
+
+  client2:
+    build: ./client
+    container_name: client2
+    environment:
+      - CLIENT_ID=client2
+    depends_on:
+      - broker
