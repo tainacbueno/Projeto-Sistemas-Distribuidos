@@ -11,16 +11,22 @@ services:
     container_name: server1
     environment:
       - SERVER_ID=server1
+    volumes:
+        - ./server/data:/app/data
     depends_on:
       - broker
+      - pubsub-proxy
 
   server2:
     build: ./server
     container_name: server2
     environment:
       - SERVER_ID=server2
+    volumes:
+      - ./server/data:/app/data
     depends_on:
       - broker
+      - pubsub-proxy
 
   client1:
     build: ./client
@@ -29,6 +35,7 @@ services:
       - CLIENT_ID=client1
     depends_on:
       - broker
+      - pubsub-proxy
 
   client2:
     build: ./client
@@ -37,3 +44,11 @@ services:
       - CLIENT_ID=client2
     depends_on:
       - broker
+      - pubsub-proxy
+
+  pubsub-proxy:
+    build: ./proxy
+    container_name: pubsub-proxy
+    ports:
+      - "5557:5557"
+      - "5558:5558"

@@ -2,8 +2,8 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-RUN pip install pyzmq msgpack
+RUN pip install pyzmq msgpack pytz
 
-COPY app.py .
+COPY . .
 
-CMD ["python", "app.py"]
+CMD ["python", "server.py"]

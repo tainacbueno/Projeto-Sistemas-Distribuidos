@@ -4,6 +4,6 @@ WORKDIR /app
 
 RUN pip install pyzmq msgpack
 
-COPY app.py .
+COPY broker.py .
 
-CMD ["python", "app.py"]
+CMD ["python", "broker.py"]

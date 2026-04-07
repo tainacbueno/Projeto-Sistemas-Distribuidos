@@ -1,0 +1,10 @@
+{"type": "publish", "channel": "canal_client1_0", "message": "client1 diz: Isso é um projeto de SD", "timestamp": "2026-04-07 14:23:33 BRT", "stored_at": "2026-04-07 14:23:33 BRT"}
+{"type": "publish", "channel": "canal_client2_1", "message": "client2 diz: Mensagem de teste", "timestamp": "2026-04-07 14:23:34 BRT", "stored_at": "2026-04-07 14:23:34 BRT"}
+{"type": "publish", "channel": "canal_client1_0", "message": "client1 diz: Testando publicação no canal", "timestamp": "2026-04-07 14:23:34 BRT", "stored_at": "2026-04-07 14:23:34 BRT"}
+{"type": "publish", "channel": "canal_client2_1", "message": "client2 diz: Mensagem de teste", "timestamp": "2026-04-07 14:23:35 BRT", "stored_at": "2026-04-07 14:23:35 BRT"}
+{"type": "publish", "channel": "canal_client1_0", "message": "client1 diz: Olá, tudo bem?", "timestamp": "2026-04-07 14:23:35 BRT", "stored_at": "2026-04-07 14:23:35 BRT"}
+{"type": "publish", "channel": "canal_client2_1", "message": "client2 diz: Olá, tudo bem?", "timestamp": "2026-04-07 14:23:36 BRT", "stored_at": "2026-04-07 14:23:36 BRT"}
+{"type": "publish", "channel": "canal_client1_0", "message": "client1 diz: Alguém por aqui?", "timestamp": "2026-04-07 14:23:37 BRT", "stored_at": "2026-04-07 14:23:37 BRT"}
+{"type": "publish", "channel": "canal_client2_1", "message": "client2 diz: Testando publicação no canal", "timestamp": "2026-04-07 14:23:37 BRT", "stored_at": "2026-04-07 14:23:37 BRT"}
+{"type": "publish", "channel": "canal_client1_0", "message": "client1 diz: Testando publicação no canal", "timestamp": "2026-04-07 14:23:38 BRT", "stored_at": "2026-04-07 14:23:38 BRT"}
+{"type": "publish", "channel": "canal_client2_1", "message": "client2 diz: Bom dia, pessoal!", "timestamp": "2026-04-07 14:23:38 BRT", "stored_at": "2026-04-07 14:23:38 BRT"}
