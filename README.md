@@ -40,6 +40,23 @@ O nome do canal é utilizado como tópico da mensagem, permitindo que clientes s
 
 ---
 
+### Relógios e Heartbeat
+Foram adicionados mecanismos de controle de tempo e disponibilidade dos servidores.
+
+- **Relógio lógico (Lamport)**
+
+Clientes e servidores passaram a utilizar um contador (`logical_clock`) que é incrementado antes de cada envio e atualizado ao receber mensagens, garantindo a ordenação lógica dos eventos.
+
+- **Serviço de referência**
+
+Foi criado um novo serviço responsável por atribuir um rank aos servidores, manter a lista de servidores ativos e fornecer o horário atual para sincronização.
+
+- **Heartbeat**
+
+Os servidores enviam periodicamente um heartbeat (a cada 10 mensagens processadas) para o serviço de referência, informando que continuam ativos. Servidores que não enviam heartbeat são removidos da lista.
+
+---
+
 ### Persistência
 
 O armazenamento é feito no servidor, centralizando a persistência. O formato escolhido é JSON por linha, facilitando a leitura manual, o processamento posterior e a recuperação de dados. Cada execução do servidor gera um novo arquivo de log, evitando sobrescrita de dados.
@@ -49,8 +66,8 @@ Exemplo de estrutura:<br>
 
 
 Exemplo de entrada no arquivo de log:<br>
-```{  "type": "publish", 
-"channel": "canal_client1_0",  "message": "client1 diz: Isso é um projeto de SD",  "timestamp": "2026-04-07 14:23:33 BRT",  "stored_at": "2026-04-07 14:23:33 BRT"}
+```
+{"type": "publish", "channel": "canal_client1_0",  "message": "client1 diz: Isso é um projeto de SD",  "timestamp": "2026-04-07 14:23:33 BRT", "logical_clock": 35, "server_id": "server2", "server_rank": 1, "stored_at": "2026-04-24 23:11:55 BRT"}
 ```
 Os timestamps são armazenados no horário de Brasília (BRT) para facilitar a leitura e análise.
 
