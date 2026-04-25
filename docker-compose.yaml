@@ -16,6 +16,7 @@ services:
     depends_on:
       - broker
       - pubsub-proxy
+      - reference
 
   server2:
     build: ./server
@@ -27,6 +28,7 @@ services:
     depends_on:
       - broker
       - pubsub-proxy
+      - reference
 
   client1:
     build: ./client
@@ -52,3 +54,9 @@ services:
     ports:
       - "5557:5557"
       - "5558:5558"
+
+  reference:
+    build: ./reference
+    container_name: reference
+    ports:
+      - "5560:5560"

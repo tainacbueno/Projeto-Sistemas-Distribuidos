@@ -12,6 +12,8 @@ import java.util.ArrayList;
 
 public class App {
 
+    static long logicalClock = 0;
+
     public static void main(String[] args) throws Exception {
 
         String clientId = System.getenv().getOrDefault("CLIENT_ID", "client");
@@ -76,6 +78,7 @@ public class App {
                         }
                     }
 
+                    updateClock(map.get("logical_clock"));
                     long receivedAt = System.currentTimeMillis();
 
                     System.out.println("[PUBSUB] Canal: " + channel +
@@ -95,6 +98,7 @@ public class App {
 
         send(socket, map("type", "list_channels"), clientId);
         Map<String, Object> reply = recvWithReturn(socket, clientId);
+
         if (reply.containsKey("channels")) {
             channels = (List<String>) reply.get("channels");
         }
@@ -150,8 +154,20 @@ public class App {
         }
     }
 
+    static long incrementClock() {
+        logicalClock++;
+        return logicalClock;
+    }
+
+    static void updateClock(Object receivedClock) {
+        if (receivedClock instanceof Long) {
+            logicalClock = Math.max(logicalClock, (Long) receivedClock);
+        }
+    }
+
     static void send(ZMQ.Socket socket, Map<String, Object> map, String clientId) throws Exception {
         map.put("timestamp", System.currentTimeMillis());
+        map.put("logical_clock", incrementClock());
 
         MessageBufferPacker packer = MessagePack.newDefaultBufferPacker();
         packer.packMapHeader(map.size());
@@ -209,6 +225,7 @@ public class App {
             }
         }
 
+        updateClock(map.get("logical_clock"));
         System.out.println("[CLIENT " + clientId + "] RECEBIDO: " + map);
     }
 
@@ -245,6 +262,7 @@ public class App {
             }
         }
 
+        updateClock(map.get("logical_clock"));
         System.out.println("[CLIENT " + clientId + "] RECEBIDO: " + map);
         return map;
     }
