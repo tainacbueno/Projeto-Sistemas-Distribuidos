@@ -11,7 +11,7 @@ def increment_clock():
 def update_clock(received_clock):
     global logical_clock
     if received_clock is not None:
-        logical_clock = max(logical_clock, received_clock)
+        logical_clock = max(logical_clock, int(received_clock))
 
 
 def physical_time():
@@ -19,10 +19,15 @@ def physical_time():
     return time.time() + physical_clock_offset
 
 
-def sync_with_reference(ref_socket, server_id, msg_type):
-    import msgpack, time
+def set_physical_time(correct_time):
+    import time
 
     global physical_clock_offset
+    physical_clock_offset = correct_time - time.time()
+
+
+def sync_with_reference(ref_socket, server_id, msg_type):
+    import msgpack
 
     request = {
         "type": msg_type,
@@ -33,7 +38,6 @@ def sync_with_reference(ref_socket, server_id, msg_type):
     ref_socket.send(msgpack.packb(request))
     reply = msgpack.unpackb(ref_socket.recv(), raw=False)
 
-    if "current_time" in reply:
-        physical_clock_offset = reply["current_time"] - time.time()
+    update_clock(reply.get("logical_clock"))
 
     return reply

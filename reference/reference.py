@@ -45,8 +45,7 @@ while True:
 
         reply = {
             "status": "ok",
-            "rank": servers[server_name]["rank"],
-            "current_time": time.time()
+            "rank": servers[server_name]["rank"]
         }
 
     elif msg_type == "list":
@@ -55,24 +54,20 @@ while True:
             "servers": [
                 {"name": name, "rank": info["rank"]}
                 for name, info in servers.items()
-            ],
-            "current_time": time.time()
+            ]
         }
 
     elif msg_type == "heartbeat":
-        if server_name in servers:
+        if server_name in servers: 
             servers[server_name]["last_seen"] = time.time()
-
-        reply = {
-            "status": "ok",
-            "current_time": time.time()
-        }
+            reply = {
+                "status": "ok" 
+            }
 
     else:
         reply = {
             "status": "error",
-            "message": "tipo inválido",
-            "current_time": time.time()
+            "message": "tipo inválido"
         }
 
     print(f"[REFERENCE] RECEBIDO: {data}", flush=True)
