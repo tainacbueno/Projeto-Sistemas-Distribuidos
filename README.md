@@ -49,11 +49,37 @@ Clientes e servidores passaram a utilizar um contador (`logical_clock`) que é i
 
 - **Serviço de referência**
 
-Foi criado um novo serviço responsável por atribuir um rank aos servidores, manter a lista de servidores ativos e fornecer o horário atual para sincronização.
+Foi criado um novo serviço responsável por atribuir um rank aos servidores e manter a lista de servidores ativos e fornecer o horário atual para sincronização*.
+
+*o mecanismo de eleição passa a ser o responsável pelo horário atual
 
 - **Heartbeat**
 
 Os servidores enviam periodicamente um heartbeat (a cada 10 mensagens processadas) para o serviço de referência, informando que continuam ativos. Servidores que não enviam heartbeat são removidos da lista.
+
+---
+### Eleição e Sincronização de Relógio
+
+Foi implementado um mecanismo de eleição de coordenador entre os servidores, substituindo o serviço de referência como fonte de tempo.
+
+- **Eleição de coordenador**
+
+Os servidores utilizam o rank fornecido pelo serviço de referência para eleger um coordenador.  
+Quando um servidor não consegue se comunicar com o coordenador atual, ele inicia um processo de eleição, enviando requisições para os demais servidores ativos.  
+O servidor com melhor rank (menor valor) entre os disponíveis é escolhido como coordenador.
+
+- **Anúncio do coordenador**
+
+Após a eleição, o servidor eleito publica seu identificador no tópico `servers` utilizando o padrão Pub/Sub.  
+Todos os servidores inscritos nesse tópico atualizam localmente quem é o coordenador atual.
+
+- **Sincronização de relógio (Berkeley)**
+
+A sincronização de relógio passa a ser feita diretamente entre servidores.  
+A cada 15 mensagens processadas, os servidores solicitam o horário ao coordenador, que responde com o tempo atual.  
+Os servidores então ajustam seus relógios locais com base na resposta recebida.
+
+Esse mecanismo elimina a dependência do serviço de referência para sincronização de tempo, tornando o sistema mais distribuído e resiliente a falhas.
 
 ---
 
@@ -68,6 +94,7 @@ Exemplo de estrutura:<br>
 Exemplo de entrada no arquivo de log:<br>
 ```
 {"type": "publish", "channel": "canal_client1_0",  "message": "client1 diz: Isso é um projeto de SD",  "timestamp": "2026-04-07 14:23:33 BRT", "logical_clock": 35, "server_id": "server2", "server_rank": 1, "stored_at": "2026-04-24 23:11:55 BRT"}
+{"type": "coordinator_announcement", "server_id": "server1", "coordinator": "server1", "logical_clock": 83, "stored_at": "2026-05-01 14:46:53 BRT"}
 ```
 Os timestamps são armazenados no horário de Brasília (BRT) para facilitar a leitura e análise.
 
