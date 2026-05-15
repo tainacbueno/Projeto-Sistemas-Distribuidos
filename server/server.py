@@ -2,8 +2,9 @@ import zmq
 import msgpack
 import time
 import os
+import uuid
 
-from storage import now_brt, save_message
+from storage import now_brt, save_message, load_publish_messages
 import utils as utils
 
 SERVER_ID = os.getenv("SERVER_ID", "server")
@@ -38,9 +39,117 @@ SERVER_RANK = rank_reply["rank"]
 print(f"[SERVER {SERVER_ID}] rank recebido: {SERVER_RANK}", flush=True)
 
 received_messages = 0
+replicated_messages = set()
+next_heartbeat_count = 15
+
+initial_pull_done = False
+
+for message in load_publish_messages():
+    event_id = message.get("event_id")
+    if event_id:
+        replicated_messages.add(event_id)
 
 ##################################################################
 ##      Funções auxiliares
+
+
+def publish_server_event(data):
+    data["logical_clock"] = utils.increment_clock()
+    pub.send(b"servers " + msgpack.packb(data))
+
+
+def build_publish_record(data, event_id, stored_by, origin_server, replicated):
+    return {
+        "type": "publish",
+        "event_id": event_id,
+        "channel": data["channel"],
+        "message": data["message"],
+        "timestamp": data.get("timestamp", now_brt()),
+        "logical_clock": data.get("logical_clock"),
+        "origin_server": origin_server,
+        "stored_by": stored_by,
+        "server_rank": SERVER_RANK,
+        "replicated": replicated
+    }
+
+
+def save_publish_record(record):
+    event_id = record.get("event_id")
+
+    if event_id in replicated_messages:
+        return False
+
+    replicated_messages.add(event_id)
+    save_message(record)
+    return True
+
+
+def replicate_publish(record):
+    publish_server_event({
+        "type": "replicate_publish",
+        "event_id": record["event_id"],
+        "origin_server": record["origin_server"],
+        "channel": record["channel"],
+        "message": record["message"],
+        "timestamp": record["timestamp"],
+        "message_logical_clock": record["logical_clock"]
+    })
+
+def request_initial_history():
+    reply = utils.sync_with_reference(ref, SERVER_ID, "list")
+    servers = reply.get("servers", [])
+
+    candidates = [
+        server for server in servers
+        if server["name"] != SERVER_ID and server["rank"] < SERVER_RANK
+    ]
+
+    if not candidates:
+        print(f"[SERVER {SERVER_ID}] pull inicial sem réplica anterior disponível", flush=True)
+        return
+
+    candidates = sorted(candidates, key=lambda x: x["rank"])
+
+    for server in candidates:
+        server_name = server["name"]
+
+        try:
+            req = context.socket(zmq.REQ)
+            req.setsockopt(zmq.RCVTIMEO, 3000)
+            req.setsockopt(zmq.LINGER, 0)
+            req.connect(f"tcp://{server_name}:6000")
+
+            req.send(msgpack.packb({
+                "type": "history",
+                "server": SERVER_ID,
+                "logical_clock": utils.increment_clock()
+            }))
+
+            history_reply = msgpack.unpackb(req.recv(), raw=False)
+            utils.update_clock(history_reply.get("logical_clock"))
+
+            synchronized = 0
+
+            for record in history_reply.get("messages", []):
+                record["stored_by"] = SERVER_ID
+                record["server_rank"] = SERVER_RANK
+                record["replicated"] = True
+
+                if save_publish_record(record):
+                    synchronized += 1
+
+            print(
+                f"[SERVER {SERVER_ID}] pull inicial concluído com {server_name}: "
+                f"{synchronized} mensagens sincronizadas",
+                flush=True
+            )
+            return
+
+        except Exception as e:
+            print(
+                f"[SERVER {SERVER_ID}] falha no pull inicial com {server_name}: {e}",
+                flush=True
+            )
 
 def sync_clock_with_coordinator():
     global coordinator
@@ -122,11 +231,10 @@ def elect_coordinator():
 def announce_coordinator():
     msg = {
         "type": "coordinator",
-        "server": SERVER_ID,
-        "logical_clock": utils.increment_clock()
+        "server": SERVER_ID
     }
 
-    pub.send(b"servers " + msgpack.packb(msg))
+    publish_server_event(msg)
 
     save_message({
         "type": "coordinator_announcement",
@@ -142,6 +250,11 @@ def announce_coordinator():
 ##      Loop principal
 
 while True:
+    if not initial_pull_done:
+        time.sleep(1)
+        request_initial_history()
+        initial_pull_done = True
+
     socks = dict(poller.poll())
 
     if socket in socks:
@@ -170,28 +283,42 @@ while True:
         elif data["type"] == "publish":
             channel = data["channel"]
             message = data["message"]
+            event_id = str(uuid.uuid4())
+            message_clock = utils.increment_clock()
 
             payload = {
                 "channel": channel,
                 "message": message,
                 "timestamp": data["timestamp"],
-                "logical_clock": utils.increment_clock(),
+                "logical_clock": message_clock,
                 "server_id": SERVER_ID
             }
 
             pub.send(channel.encode() + b" " + msgpack.packb(payload))
 
-            sent_at = now_brt()
+            record = build_publish_record(
+                {
+                    "channel": channel,
+                    "message": message,
+                    "timestamp": now_brt(),
+                    "logical_clock": message_clock
+                },
+                event_id=event_id,
+                stored_by=SERVER_ID,
+                origin_server=SERVER_ID,
+                replicated=False
+            )
 
-            save_message({
-                "type": "publish",
-                "channel": channel,
-                "message": message,
-                "timestamp": sent_at,
-                "logical_clock": payload["logical_clock"],
-                "server_id": SERVER_ID,
-                "server_rank": SERVER_RANK
-            })
+            save_publish_record(record)
+            replicate_publish(record)
+
+            print(
+                f"[SERVER {SERVER_ID}] replicação enviada | "
+                f"event_id={record['event_id']} | "
+                f"origem={record['origin_server']} | "
+                f"canal={record['channel']}",
+                flush=True
+            )
 
             response["msg"] = "published"
 
@@ -225,6 +352,20 @@ while True:
                 "logical_clock": utils.increment_clock()
             }
 
+        elif data["type"] == "history":
+            reply = {
+                "status": "ok",
+                "server": SERVER_ID,
+                "messages": load_publish_messages(),
+                "logical_clock": utils.increment_clock()
+            }
+
+            print(
+                f"[SERVER {SERVER_ID}] histórico enviado para {data.get('server')}: "
+                f"{len(reply['messages'])} mensagens",
+                flush=True
+            )
+
         else:
             reply = {
                 "status": "error",
@@ -249,8 +390,33 @@ while True:
                 coordinator = data["server"]
                 print(f"[SERVER {SERVER_ID}] novo coordenador recebido: {coordinator}", flush=True)
 
-    if received_messages % 15 == 0:
+            elif topic == "servers" and data.get("type") == "replicate_publish":
+                if data.get("origin_server") != SERVER_ID:
+                    record = build_publish_record(
+                        {
+                            "channel": data["channel"],
+                            "message": data["message"],
+                            "timestamp": data["timestamp"],
+                            "logical_clock": data.get("message_logical_clock")
+                        },
+                        event_id=data["event_id"],
+                        stored_by=SERVER_ID,
+                        origin_server=data["origin_server"],
+                        replicated=True
+                    )
+
+                    if save_publish_record(record):
+                        print(
+                            f"[SERVER {SERVER_ID}] mensagem replicada | "
+                            f"event_id={record['event_id']} | "
+                            f"origem={record['origin_server']} | "
+                            f"salvo_por={record['stored_by']}",
+                            flush=True
+                        )
+
+    if received_messages >= next_heartbeat_count:
         utils.sync_with_reference(ref, SERVER_ID, "heartbeat")
+        next_heartbeat_count += 15
 
         if coordinator is None:
             elect_coordinator()
@@ -260,4 +426,4 @@ while True:
             ok = sync_clock_with_coordinator()
             if not ok:
                 print(f"[SERVER {SERVER_ID}] coordenador indisponível, iniciando eleição", flush=True)
-                elect_coordinator()     
+                elect_coordinator()

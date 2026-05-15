@@ -12,7 +12,7 @@ services:
     environment:
       - SERVER_ID=server1
     volumes:
-        - ./server/data:/app/data
+      - ./server/data/server1:/app/data
     depends_on:
       - broker
       - pubsub-proxy
@@ -24,7 +24,7 @@ services:
     environment:
       - SERVER_ID=server2
     volumes:
-      - ./server/data:/app/data
+      - ./server/data/server2:/app/data
     depends_on:
       - broker
       - pubsub-proxy
