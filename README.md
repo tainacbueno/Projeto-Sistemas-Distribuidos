@@ -83,20 +83,71 @@ Esse mecanismo elimina a dependência do serviço de referência para sincroniza
 
 ---
 
+### Consistência e Replicação
+
+Foi implementada a replicação das mensagens entre os servidores para evitar que cada servidor mantenha apenas uma parte do histórico.
+
+Como o broker distribui as requisições entre os servidores por balanceamento de carga, uma mensagem publicada pode ser processada pelo `server1` ou pelo `server2`. Sem replicação, se um servidor parasse de funcionar, parte das mensagens armazenadas poderia ficar indisponível.
+
+Para resolver esse problema, foi utilizada uma combinação de **réplica ativa**, **atualização por push**, **atualização por pull** e **consistência eventual**.
+
+- **Réplica ativa**
+
+Na réplica ativa, a operação de atualização é propagada entre as réplicas.  
+No projeto, quando um servidor recebe uma mensagem do tipo `publish`, ele salva a publicação localmente e envia um evento de replicação para os demais servidores.
+
+- **Atualização por push**
+
+A atualização por push ocorre quando o servidor que recebeu a mensagem inicia a propagação para os outros servidores.  
+Essa propagação é feita pelo tópico interno `servers`, utilizando o Pub/Sub já existente no projeto.
+
+Com isso, quando um servidor recebe uma publicação, os demais servidores ativos recebem uma cópia da mesma mensagem e também armazenam em disco.
+
+- **Atualização por pull**
+
+Além do push, foi implementada uma sincronização inicial por pull.  
+Quando um servidor inicia ou volta depois de uma parada, ele consulta o serviço de referência para descobrir outros servidores ativos e solicita o histórico armazenado por uma réplica disponível.
+
+Esse mecanismo permite que um servidor que ficou fora do ar recupere as mensagens que perdeu enquanto estava indisponível.
+
+- **Consistência eventual**
+
+O modelo adotado é de consistência eventual.  
+Pode existir um pequeno intervalo em que uma mensagem recém-publicada está presente apenas no servidor que a recebeu originalmente. Porém, após a propagação por push, os demais servidores também armazenam essa mensagem.
+
+Da mesma forma, se um servidor voltar após uma falha, ele pode iniciar desatualizado, mas após o pull inicial volta a possuir o histórico replicado.
+
+---
+
 ### Persistência
 
-O armazenamento é feito no servidor, centralizando a persistência. O formato escolhido é JSON por linha, facilitando a leitura manual, o processamento posterior e a recuperação de dados. Cada execução do servidor gera um novo arquivo de log, evitando sobrescrita de dados.
+O armazenamento é feito no servidor, centralizando a persistência. O formato escolhido é JSON por linha, facilitando a leitura manual, o processamento posterior e a recuperação de dados.
 
-Exemplo de estrutura:<br>
-<img width="324" height="65" alt="image" src="https://github.com/user-attachments/assets/230eb445-b252-4c8e-b6ba-a78058ba520d" />
+Ambos os servidores possuem uma pasta separada para seus arquivos de log, permitindo verificar individualmente o histórico armazenado por cada um:<br>
+```text
+data/
+├── server1/
+│   └── messages_2026-05-15_18-05-21.log
+└── server2/
+    └── messages_2026-05-15_18-05-21.log
+```
 
+Cada mensagem publicada possui um `event_id`, utilizado para evitar duplicidade na gravação. Assim, se uma mesma mensagem for recebida novamente por replicação ou sincronização, ela não é salva mais de uma vez pelo mesmo servidor.
 
 Exemplo de entrada no arquivo de log:<br>
+
 ```
-{"type": "publish", "channel": "canal_client1_0",  "message": "client1 diz: Isso é um projeto de SD",  "timestamp": "2026-04-07 14:23:33 BRT", "logical_clock": 35, "server_id": "server2", "server_rank": 1, "stored_at": "2026-04-24 23:11:55 BRT"}
-{"type": "coordinator_announcement", "server_id": "server1", "coordinator": "server1", "logical_clock": 83, "stored_at": "2026-05-01 14:46:53 BRT"}
+{
+  "type": "publish",
+  "event_id": "86915cbf-0ebc-4f68-8062-770515e63d53",
+  "channel": "canal_client2_0",
+  "message": "client2 diz: Isso é um projeto de SD",
+  "origin_server": "server2",
+  "stored_by": "server1",
+  "replicated": true
+}
 ```
-Os timestamps são armazenados no horário de Brasília (BRT) para facilitar a leitura e análise.
+*Os timestamps são armazenados no horário de Brasília (BRT) para facilitar a leitura e análise.
 
 ---
 
